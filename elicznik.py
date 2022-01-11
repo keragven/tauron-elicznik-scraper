@@ -5,21 +5,8 @@ from requests import adapters
 import ssl
 from urllib3 import poolmanager
 import datetime
+import json
 
-#Add login details & meter ID here:
-username = 'TAURON_USERNAME'
-password = 'TAURON_PASSWORD'
-meter_id = TAURON_ENERGY_METER_ID
-
-payload = { 
-                'username': username,
-                'password': password ,
-                'service': 'https://elicznik.tauron-dystrybucja.pl'
-}
-
-url = 'https://logowanie.tauron-dystrybucja.pl/login'
-charturl = 'https://elicznik.tauron-dystrybucja.pl/index/charts'
-headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0'} 
 
 class TLSAdapter(adapters.HTTPAdapter):
 
@@ -34,23 +21,55 @@ class TLSAdapter(adapters.HTTPAdapter):
                 ssl_version=ssl.PROTOCOL_TLS,
                 ssl_context=ctx)
 
-session = requests.session()
-session.mount('https://', TLSAdapter())
 
-p = session.request("POST", url, data=payload, headers=headers)
-p = session.request("POST", url, data=payload, headers=headers)
+class Elicznik:
+	
+	url = 'https://logowanie.tauron-dystrybucja.pl/login'
+	charturl = 'https://elicznik.tauron-dystrybucja.pl/index/charts'
+	headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0'} 
+	service = 'https://elicznik.tauron-dystrybucja.pl'
+	
+	def __init__(self, credentials_dict):
+		self.username = credentials_dict['username']
+		self.password = credentials_dict['password']
+		self.meter_id = int(credentials_dict['meter_id'])
+		
+	def get_consumption(self, n_days=1):
+		payload = { 
+                'username': self.username,
+                'password': self.password,
+                'service': self.service
+		}
+		
+		session = requests.session()
+		session.mount('https://', TLSAdapter())
 
-chart = {
-	        #change timedelta to get data from another days (1 for yesterday)
-                "dane[chartDay]": (datetime.datetime.now() - datetime.timedelta(1)).strftime('%d.%m.%Y'),
-                "dane[paramType]": "day",
-                "dane[smartNr]": meter_id,
-	        #comment if don't want generated energy data in JSON output:
-                "dane[checkOZE]": "on"
-}
+		p = session.request("POST", self.url, data=payload, headers=self.headers)
+		p = session.request("POST", self.url, data=payload, headers=self.headers)
 
-r = session.request("POST", charturl, data=chart, headers=headers)
-print(r.text)
+		chart = {
+					#change timedelta to get data from another days (1 for yesterday)
+						"dane[chartDay]": (datetime.datetime.now() - datetime.timedelta(n_days)).strftime('%d.%m.%Y'),
+						"dane[paramType]": "day",
+						"dane[smartNr]": self.meter_id,
+					#comment if don't want generated energy data in JSON output:
+						"dane[checkOZE]": "on"
+		}
+
+		r = session.request("POST", self.charturl, data=chart, headers=self.headers)
+		return r.text
+
+def main():
+    with open('credentials.json', 'r') as cred:
+        credentials = json.load(cred)
+    licznik = Elicznik(credentials)
+    txt = licznik.get_consumption(n_days=2)
+    print(txt)
+
+
+if __name__ == '__main__':
+    main()
+
 
 #Optionally write JSON to file
 #with open('file.json', 'wb') as f:
