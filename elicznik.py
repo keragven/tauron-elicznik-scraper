@@ -33,6 +33,7 @@ class TLSAdapter(adapters.HTTPAdapter):
 class Elicznik:
     url = 'https://logowanie.tauron-dystrybucja.pl/login'
     charturl = 'https://elicznik.tauron-dystrybucja.pl/index/charts'
+    meters_url = 'https://elicznik.tauron-dystrybucja.pl/odczyty'
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0'}
     service = 'https://elicznik.tauron-dystrybucja.pl'
 
@@ -40,19 +41,19 @@ class Elicznik:
         self.username = credentials_dict['username']
         self.password = credentials_dict['password']
         self.meter_id = int(credentials_dict['meter_id'])
-
-    def get_daily_raw(self, n_days=1):
-        payload = {
+        self.payload = {
             'username': self.username,
             'password': self.password,
             'service': self.service
         }
 
+    def get_daily_raw(self, n_days=1):
+
         session = requests.session()
         session.mount('https://', TLSAdapter())
 
-        p = session.request("POST", self.url, data=payload, headers=self.headers)
-        p = session.request("POST", self.url, data=payload, headers=self.headers)
+        p = session.request("POST", self.url, data=self.payload, headers=self.headers)
+        p = session.request("POST", self.url, data=self.payload, headers=self.headers)
 
         chart = {
             # change timedelta to get data from another days (1 for yesterday)
@@ -95,15 +96,30 @@ class Elicznik:
             log.error('Brak danych z {} dni temu.'.format(n_days))
             return
 
+    def get_last_meters_raw(self):
+
+        session = requests.session()
+        session.mount('https://', TLSAdapter())
+
+        p = session.request("POST", self.url, data=self.payload, headers=self.headers)
+        p = session.request("POST", self.url, data=self.payload, headers=self.headers)
+
+
+        r = session.request("GET", self.meters_url, headers=self.headers)
+        return r.text
+
 
 def main():
     with open('credentials.json', 'r') as cred:
         credentials = json.load(cred)
     licznik = Elicznik(credentials)
+    m = licznik.get_last_meters_raw()
+    print(m)
+    '''
     for n in range(1, 7):
         txt = licznik.get_daily_info(n)
         print(txt)
-
+'''
 
 if __name__ == '__main__':
     main()
