@@ -1,21 +1,71 @@
 #!/usr/bin/env python
 
-import requests
-from requests import adapters
-import ssl
-from urllib3 import poolmanager
 import datetime
 import json
 import logging as log
+import re
+import ssl
+from html.parser import HTMLParser
+
+import requests
+from requests import adapters
+from urllib3 import poolmanager
 
 ONE_DAY = datetime.timedelta(days=1)
 TODAY = datetime.date.today()
+
+
+class TauronMetersParser(HTMLParser):
+    '''Based on an example from: https://docs.python.org/3.7/library/html.parser.html'''
+
+    def __init__(self):
+        super(TauronMetersParser, self).__init__()
+        self.pobor_found = False
+        self.date_found = False
+        self.prod_found = False
+        self.date = None
+        self.pobr = []
+        self.prod = []
+
+    def handle_data(self, data):
+        if data == 'Pobór:':
+            self.pobor_found = True
+
+        if data == 'Oddanie:':
+            self.prod_found = True
+
+        if self.pobor_found or self.prod_found:
+            matched_date = re.match(r'([0-9]{2})\.([0-9]{2})\.([0-9]{4}) \(([0-9]{2}):([0-9]{2}):([0-9]{2})\)', data)
+            if matched_date:
+                datetime_ints = [int(x) for x in matched_date.groups()]
+                found_dt = datetime.datetime(year=datetime_ints[2],
+                                             month=datetime_ints[1],
+                                             day=datetime_ints[0],
+                                             hour=datetime_ints[3],
+                                             minute=datetime_ints[4],
+                                             second=datetime_ints[5],
+                                             )
+                self.date_found = True
+                self.date = found_dt
+        if (self.pobor_found or self.prod_found) and self.date_found and self.lasttag == 'span':
+            matched_6digits = re.match(r'[0-9]{6}', data)
+            if matched_6digits:
+                if self.pobor_found:
+                    self.pobr.append((self.date, int(matched_6digits.string)))
+                if self.prod_found:
+                    self.prod.append((self.date, int(matched_6digits.string)))
+
+                self.pobor_found = False
+                self.date_found = False
+                self.prod_found = False
+                # print("Encountered some data  :", data)
 
 
 def dmy2date(str_):
     return datetime.date(int(str_.split('.')[2]), int(str_.split('.')[1]), int(str_.split('.')[0]))
 
 
+# noinspection PyMethodOverriding
 class TLSAdapter(adapters.HTTPAdapter):
 
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -108,13 +158,24 @@ class Elicznik:
         r = session.request("GET", self.meters_url, headers=self.headers)
         return r.text
 
+    def parse_html(self, html_feed):
+        htp = TauronMetersParser()
+        htp.feed(html_feed)
+        return htp.pobr, htp.prod
+
+    def get_last_meters(self):
+        return self.parse_html(self.get_last_meters_raw())
+
 
 def main():
     with open('credentials.json', 'r') as cred:
         credentials = json.load(cred)
     licznik = Elicznik(credentials)
-    m = licznik.get_last_meters_raw()
-    print(m)
+    pobranie, oddanie = licznik.get_last_meters()
+
+    print(pobranie)
+    print(oddanie)
+
     '''
     for n in range(1, 7):
         txt = licznik.get_daily_info(n)
