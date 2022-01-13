@@ -6,6 +6,7 @@ import ssl
 from urllib3 import poolmanager
 import datetime
 import json
+import logging as log
 
 ONE_DAY = datetime.timedelta(days=1)
 TODAY = datetime.date.today()
@@ -66,35 +67,42 @@ class Elicznik:
         return r.json()
 
     def pick_daily_stats(self, stats_dump):
-        pobr_data = dmy2date(stats_dump['name']['chart'][-10:])
-        prod_data = dmy2date(stats_dump['name']['OZE'][-10:])
+        try:
+            pobr_data = dmy2date(stats_dump['name']['chart'][-10:])
+            prod_data = dmy2date(stats_dump['name']['OZE'][-10:])
+        except KeyError:
+            log.error('Pobrane dane sa niekompletne.')
+            return
         pobr_kwh = stats_dump['sum']
         prod_kwh = stats_dump['OZEValue']
         is_full = stats_dump['isFull']
         if pobr_data == prod_data:
             return (pobr_data, pobr_kwh, prod_kwh, is_full)
         else:
-            raise IOError('Daty produkcji i poboru sa rozne.')
+            log.error('Daty produkcji i poboru sa rozne.')
+            return
 
-    def get_yesterday_info(self):
-        daily_data_raw = self.get_daily_raw()
+    def get_daily_info(self, n_days):
+        daily_data_raw = self.get_daily_raw(n_days=n_days)
         daily_data = self.pick_daily_stats(daily_data_raw)
-        if daily_data[0] + ONE_DAY == TODAY:
-            if daily_data[2] == True:
+        if daily_data[0] + ONE_DAY * n_days == TODAY:
+            if daily_data[3]:
                 return daily_data
             else:
-                raise IOError('Dane z wczoraj sa niekompletne.')
+                log.error('Dane z {} dni temu sa niekompletne.'.format(n_days))
+                return
         else:
-            raise IOError('Brak danych z wczoraj.')
+            log.error('Brak danych z {} dni temu.'.format(n_days))
+            return
 
 
 def main():
     with open('credentials.json', 'r') as cred:
         credentials = json.load(cred)
     licznik = Elicznik(credentials)
-    txt = licznik.get_yesterday_info()
-
-    print(txt)
+    for n in range(1, 7):
+        txt = licznik.get_daily_info(n)
+        print(txt)
 
 
 if __name__ == '__main__':
