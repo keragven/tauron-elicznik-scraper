@@ -14,6 +14,7 @@ TODAY = datetime.date.today()
 def dmy2date(str_):
     return datetime.date(int(str_.split('.')[2]), int(str_.split('.')[1]), int(str_.split('.')[0]))
 
+
 class TLSAdapter(adapters.HTTPAdapter):
 
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -21,32 +22,31 @@ class TLSAdapter(adapters.HTTPAdapter):
         ctx = ssl.create_default_context()
         ctx.set_ciphers('DEFAULT@SECLEVEL=1')
         self.poolmanager = poolmanager.PoolManager(
-                num_pools=connections,
-                maxsize=maxsize,
-                block=block,
-                ssl_version=ssl.PROTOCOL_TLS,
-                ssl_context=ctx)
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_version=ssl.PROTOCOL_TLS,
+            ssl_context=ctx)
 
 
 class Elicznik:
-    
     url = 'https://logowanie.tauron-dystrybucja.pl/login'
     charturl = 'https://elicznik.tauron-dystrybucja.pl/index/charts'
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0'} 
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:52.0) Gecko/20100101 Firefox/52.0'}
     service = 'https://elicznik.tauron-dystrybucja.pl'
-    
+
     def __init__(self, credentials_dict):
         self.username = credentials_dict['username']
         self.password = credentials_dict['password']
         self.meter_id = int(credentials_dict['meter_id'])
-        
+
     def get_daily_raw(self, n_days=1):
-        payload = { 
-                'username': self.username,
-                'password': self.password,
-                'service': self.service
+        payload = {
+            'username': self.username,
+            'password': self.password,
+            'service': self.service
         }
-        
+
         session = requests.session()
         session.mount('https://', TLSAdapter())
 
@@ -54,12 +54,12 @@ class Elicznik:
         p = session.request("POST", self.url, data=payload, headers=self.headers)
 
         chart = {
-                    #change timedelta to get data from another days (1 for yesterday)
-                        "dane[chartDay]": (datetime.datetime.now() - datetime.timedelta(n_days)).strftime('%d.%m.%Y'),
-                        "dane[paramType]": "day",
-                        "dane[smartNr]": self.meter_id,
-                    #comment if don't want generated energy data in JSON output:
-                        "dane[checkOZE]": "on"
+            # change timedelta to get data from another days (1 for yesterday)
+            "dane[chartDay]": (datetime.datetime.now() - datetime.timedelta(n_days)).strftime('%d.%m.%Y'),
+            "dane[paramType]": "day",
+            "dane[smartNr]": self.meter_id,
+            # comment if don't want generated energy data in JSON output:
+            "dane[checkOZE]": "on"
         }
 
         r = session.request("POST", self.charturl, data=chart, headers=self.headers)
@@ -86,20 +86,20 @@ class Elicznik:
                 raise IOError('Dane z wczoraj sa niekompletne.')
         else:
             raise IOError('Brak danych z wczoraj.')
-        
+
+
 def main():
     with open('credentials.json', 'r') as cred:
         credentials = json.load(cred)
     licznik = Elicznik(credentials)
     txt = licznik.get_yesterday_info()
-    
+
     print(txt)
 
 
 if __name__ == '__main__':
     main()
 
-
-#Optionally write JSON to file
-#with open('file.json', 'wb') as f:
+# Optionally write JSON to file
+# with open('file.json', 'wb') as f:
 #    f.write(r.content)
