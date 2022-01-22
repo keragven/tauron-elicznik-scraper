@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import datetime
 import json
@@ -177,11 +176,10 @@ def main():
     print(pobranie)
     print(oddanie)
 
-    '''
     for n in range(1, 7):
         txt = licznik.get_daily_info(n)
         print(txt)
-'''
+
 
 if __name__ == '__main__':
     main()
